@@ -36,10 +36,10 @@ The goal of this assignment was to develop a fully functional, local command-lin
 
 1.  **Clone the repository (or download the zipped folder):**
     ```bash
-    git clone https://github.com/your-username/huggingface_chatbot.git
-    cd huggingface_chatbot
+    git clone https://github.com/your-username/CLI-Chatbot.git
+    cd CLI-Chatbot
     ```
-    (If using a zipped folder, unzip it and navigate into the `huggingface_chatbot` directory.)
+    (If using a zipped folder, unzip it and navigate into the `CLI-Chatbot` directory.)
 
 2.  **Create a Python Virtual Environment (recommended):**
     ```bash
