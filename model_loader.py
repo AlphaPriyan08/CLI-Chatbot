@@ -1,48 +1,73 @@
-from transformers import pipeline
-import torch
+# chat_memory.py
 
-class ModelLoader:
+from collections import deque
+
+class ChatMemory:
     """
-    A class to encapsulate the loading and management of a Hugging Face
-    text generation pipeline.
+    Manages the conversation history for the chatbot using a sliding window mechanism.
+    It stores individual messages and formats them into a coherent string for the language model.
     """
-    def __init__(self, model_name: str = "microsoft/phi-1_5"):
-        # smaller models like distilgpt2 or OPT-125m struggled with factual question answering and maintaining coherence 
-        self.model_name = model_name
-        self.pipeline = None
-        # Determine the device to use (GPU if available, otherwise CPU)
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[{self.__class__.__name__}] Using device: {self.device.upper()}")
+    def __init__(self, max_turns: int = 5):
+        """
+        Initializes the ChatMemory with a maximum number of conversation turns to remember.
+        A 'turn' is typically defined as one user message followed by one bot message.
+        
+        Args:
+            max_turns (int): The maximum number of user-bot message pairs to retain in memory.
+                             This translates to roughly `max_turns * 2` individual messages.
+        """
+        if max_turns < 1:
+            raise ValueError("max_turns must be at least 1.")
+        self.max_turns = max_turns
+        # Using a deque (double-ended queue) for efficient addition and retrieval
+        # of messages from either end, suitable for sliding window implementation.
+        self.history = deque()
 
-    def load_model(self):
+    def add_message(self, speaker: str, text: str):
         """
-        Loads the Hugging Face text generation pipeline for the specified model.
-        This function handles model and tokenizer download/caching and device placement.
+        Adds a single message (from either User or Bot) to the conversation history.
+        
+        Args:
+            speaker (str): The sender of the message (e.g., "User", "Bot").
+            text (str): The content of the message.
         """
-        if self.pipeline is None:
-            print(f"[{self.__class__.__name__}] Loading model '{self.model_name}'...")
-            try:
-                self.pipeline = pipeline(
-                    "text-generation",
-                    model=self.model_name,
-                    # Assign to the first GPU (0) if CUDA is available, otherwise use CPU (-1).
-                    device=0 if self.device == "cuda" else -1,
-                    # Use float16 precision on GPU for faster inference and reduced memory usage.
-                    # Fallback to float32 on CPU.
-                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                    # Required for some custom models (like Microsoft Phi) that include custom code.
-                    trust_remote_code=True
-                )
-                print(f"[{self.__class__.__name__}] Model '{self.model_name}' loaded successfully on {self.device.upper()}.")
-            except Exception as e:
-                print(f"[{self.__class__.__name__}] Error loading model: {e}")
-                print("Please ensure the model name is correct, you have an internet connection, and necessary dependencies.")
-                print("If loading a Phi model, ensure `trust_remote_code=True` is set in the pipeline call.")
-                self.pipeline = None # Reset pipeline on failure
-        return self.pipeline
+        self.history.append({"speaker": speaker, "text": text})
 
-    def get_model_name(self):
+        # The actual sliding window truncation (removing older messages) is
+        # primarily handled when `get_conversation_history` is called, ensuring
+        # the model always receives the most recent and relevant context.
+        pass
+
+    def get_conversation_history(self) -> str:
         """
-        Returns the name of the model configured for loading.
+        Formats the most recent conversation history into a single string
+        using an instruction-following format suitable for models like Phi-1.5.
+        The sliding window logic is applied here.
+        
+        Returns:
+            str: The formatted conversation history string ready for the LLM.
         """
-        return self.model_name
+        # Retrieve a slice of the deque containing only the most recent messages,
+        # adhering to the sliding window size (max_turns user + max_turns bot messages).
+        recent_messages = list(self.history)[-self.max_turns * 2:]
+
+        # Build the internal conversation dialogue using the User: / Bot: format.
+        inner_conversation_parts = []
+        for msg in recent_messages:
+            inner_conversation_parts.append(f"{msg['speaker']}: {msg['text']}")
+
+        # Join the individual conversation lines into a single string.
+        conversation_string = "\n".join(inner_conversation_parts)
+
+        # Wrap the entire conversation history within the "Instruct:" and "Output:" format.
+        # This explicitly tells the model it's an instruction to provide an output based on history.
+        formatted_history = f"Instruct: {conversation_string}\nOutput:"
+        
+        return formatted_history
+
+    def clear_history(self):
+        """
+        Clears the entire conversation history, resetting the chatbot's memory.
+        """
+        self.history.clear()
+        print("[ChatMemory] Conversation history cleared.")

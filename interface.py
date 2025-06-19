@@ -1,3 +1,5 @@
+# interface.py
+
 from model_loader import ModelLoader
 from chat_memory import ChatMemory
 import os
@@ -56,18 +58,18 @@ class ChatbotInterface:
                 self.chat_memory.add_message("User", user_input)
 
                 # Retrieve the formatted conversation history from memory.
-                # The `get_conversation_history` method includes the "Bot:" suffix,
-                # which acts as a prompt to encourage the model to generate a response.
+                # The `get_conversation_history` method now formats it as "Instruct: ...\nOutput:".
                 prompt = self.chat_memory.get_conversation_history()
+                # print(f"\n[DEBUG] Prompt fed to model:\n{prompt}\n") # Uncomment for debugging prompt
 
                 # Generate a response using the loaded Hugging Face model pipeline.
                 # Parameters control the length, creativity, and stopping conditions of the generation.
                 generation_output = self.generator(
                     prompt,
-                    max_new_tokens=100,  # Maximum number of new tokens (words/subwords) the bot will generate.
+                    max_new_tokens=200,  # Increased to allow for longer, more complete answers.
                     num_return_sequences=1, # We only need one response from the model.
                     do_sample=True,      # Enables sampling for more varied and human-like responses (vs. deterministic).
-                    temperature=0.7,     # Controls randomness; lower for more focused, higher for more creative.
+                    temperature=0.7,     # Adjusted slightly higher for more natural variety, can tune as needed.
                     top_k=50,            # Considers only the top K most probable next tokens.
                     top_p=0.95,          # Nucleus sampling: considers tokens whose cumulative probability exceeds p.
                     truncation=True,     # Ensures input prompt fits model's maximum context length by truncating older parts.
@@ -78,23 +80,46 @@ class ChatbotInterface:
                 # Extract the generated text from the model's output.
                 full_generated_text = generation_output[0]['generated_text']
 
-                # The model generates the prompt + its response. We need to remove the original prompt
-                # to get only the bot's newly generated part.
-                bot_response_raw = full_generated_text.replace(prompt, "", 1).strip()
-
-                # Post-process the raw bot response to clean up any unwanted prefixes or truncated dialogue
-                # that models sometimes generate.
-                if "\nUser:" in bot_response_raw:
-                    bot_response = bot_response_raw.split("\nUser:")[0].strip()
-                elif "\nBot:" in bot_response_raw:
-                    bot_response = bot_response_raw.split("\nBot:")[0].strip()
-                elif ":" in bot_response_raw and bot_response_raw.split(':')[0].strip().istitle():
-                    if bot_response_raw.lower().startswith("bot:"):
-                         bot_response = bot_response_raw[len("bot:"):].strip()
-                    else:
-                        bot_response = bot_response_raw
+                # --- REFINED POST-PROCESSING FOR PHI-1.5 ---
+                # Phi models often regenerate the "Instruct: ...\nOutput:" part or similar structures.
+                # We need to extract only the actual bot response after the *last* "Output:".
+                bot_response_raw = ""
+                last_output_idx = full_generated_text.rfind("Output:")
+                if last_output_idx != -1:
+                    # Extract everything after the last "Output:" occurrence.
+                    bot_response_raw = full_generated_text[last_output_idx + len("Output:"):].strip()
                 else:
-                    bot_response = bot_response_raw
+                    # Fallback: if "Output:" isn't found, assume model just started generating after the prompt.
+                    # This might happen if the prompt was short and not reproduced.
+                    bot_response_raw = full_generated_text.replace(prompt, "", 1).strip()
+
+                # Define explicit patterns that indicate the end of a desired response
+                # or a shift to an undesired format (like exercises or new speaker turns).
+                stop_phrases = [
+                    "\nUser:",          # If the model hallucinates a new user turn
+                    "\nBot:",           # If the model hallucinates a new bot turn (old format)
+                    "\nInstruct:",      # If the model hallucinates a new instruction
+                    "\nQuestion:",      # Common start of a new question
+                    "\nAnswer:",        # Common start of an answer
+                    "\nExercise",       # Catches the "Exercise X:" pattern
+                    "\n1.", "\n2.", "\n-", # Catches numbered/bulleted lists starting new ideas
+                    "\n\n",             # Double newline often indicates end of thought.
+                ]
+
+                # Iterate through stop phrases and truncate the response if one is found.
+                bot_response = bot_response_raw
+                for phrase in stop_phrases:
+                    if phrase in bot_response:
+                        bot_response = bot_response.split(phrase)[0].strip()
+                        break # Stop at the first encountered stop phrase
+
+                # Final cleanup: remove any leading/trailing whitespace that might remain.
+                bot_response = bot_response.strip()
+
+                # Fallback if the response becomes empty after cleaning (e.g., model only generated a stop token).
+                if not bot_response:
+                    bot_response = "I'm sorry, I couldn't generate a clear response for that. Can you please rephrase?"
+                # --- END REFINED POST-PROCESSING ---
 
                 # Add the bot's (cleaned) response to the conversation history.
                 self.chat_memory.add_message("Bot", bot_response)

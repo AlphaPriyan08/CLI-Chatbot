@@ -39,27 +39,25 @@ class ChatMemory:
 
     def get_conversation_history(self) -> str:
         """
-        Formats the most recent conversation history into a single string suitable
-        as a prompt for the language model.
-
-        The sliding window logic is applied here by selecting only the last
-        `max_turns * 2` messages from the deque. The format includes speaker labels
-        and ends with "Bot:" to prompt the model's response.
-        
-        Returns:
-            str: The formatted conversation history string ready for the LLM.
+        Formats the most recent conversation history into a single string
+        using an instruction-following format suitable for models like Phi-1.5.
+        The sliding window logic is applied here.
         """
-        # Retrieve a slice of the deque containing only the most recent messages,
-        # adhering to the sliding window size (max_turns user + max_turns bot messages).
         recent_messages = list(self.history)[-self.max_turns * 2:]
 
-        formatted_history_parts = []
+        # Build the internal conversation dialogue using the User: / Bot: format.
+        inner_conversation_parts = []
         for msg in recent_messages:
-            formatted_history_parts.append(f"{msg['speaker']}: {msg['text']}")
+            inner_conversation_parts.append(f"{msg['speaker']}: {msg['text']}")
 
-        # Append "Bot:" to the end of the history string. This is a common prompt
-        # engineering technique to guide the language model to generate its next turn.
-        return "\n".join(formatted_history_parts) + "\nBot:"
+        # Join the individual conversation lines into a single string.
+        conversation_string = "\n".join(inner_conversation_parts)
+
+        # Wrap the entire conversation history within the "Instruct:" and "Output:" format.
+        # This explicitly tells the model it's an instruction to provide an output based on history.
+        formatted_history = f"Instruct: {conversation_string}\nOutput:"
+        
+        return formatted_history
 
     def clear_history(self):
         """
