@@ -83,13 +83,17 @@ The first time you run the chatbot, the `microsoft/phi-1_5` model (approx. 2.8 G
 
 ## Sample Interaction Examples
 
+```bash
 Initializing chatbot. Please wait...
 [ModelLoader] Loading model 'microsoft/phi-1_5'...
 Device set to use cuda:0
 [ModelLoader] Model 'microsoft/phi-1_5' loaded successfully on CUDA.
+
 ==================================================
-Welcome to the Local Hugging Face Chatbot!
-Type your message and press Enter. Type '/exit' to quit.
+ Welcome to the Local Hugging Face Chatbot!
+ Type your message and press Enter. Type '/exit' to quit.
+==================================================
+
 User: Hi! How are you?
 Bot: Hello! I'm doing well, thank you. How about you?
 User: What is the language spoken in Portugal?
