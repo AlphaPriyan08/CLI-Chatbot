@@ -106,7 +106,7 @@ User: List all the languages spoken in India?
 Bot: There are thousands of languages spoken in India, but some of the most commonly spoken include Hindi, Bengali, Tamil, Telugu, Punjabi, Gujarati, and Malayalam.
 User: /exit
 Exiting chatbot. Goodbye!
-
+'''
 
 ## Code Structure
 
