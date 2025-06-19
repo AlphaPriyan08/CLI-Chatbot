@@ -34,30 +34,24 @@ class ChatMemory:
         # The actual sliding window truncation (removing older messages) is
         # primarily handled when `get_conversation_history` is called, ensuring
         # the model always receives the most recent and relevant context.
-        # No explicit popping here to maintain flexibility for history retrieval.
         pass
 
     def get_conversation_history(self) -> str:
         """
-        Formats the most recent conversation history into a single string
-        using an instruction-following format suitable for models like Phi-1.5.
+        Formats the most recent conversation history into a single string suitable
+        as a prompt for the language model, using a simple "User: / Bot:" format.
         The sliding window logic is applied here.
         """
         recent_messages = list(self.history)[-self.max_turns * 2:]
 
-        # Build the internal conversation dialogue using the User: / Bot: format.
-        inner_conversation_parts = []
+        formatted_history_parts = []
         for msg in recent_messages:
-            inner_conversation_parts.append(f"{msg['speaker']}: {msg['text']}")
+            # This is the crucial line: it should be "User:" or "Bot:"
+            formatted_history_parts.append(f"{msg['speaker']}: {msg['text']}")
 
-        # Join the individual conversation lines into a single string.
-        conversation_string = "\n".join(inner_conversation_parts)
-
-        # Wrap the entire conversation history within the "Instruct:" and "Output:" format.
-        # This explicitly tells the model it's an instruction to provide an output based on history.
-        formatted_history = f"Instruct: {conversation_string}\nOutput:"
-        
-        return formatted_history
+        # Append "Bot:" to the end of the history string to prompt the model's response.
+        # This is also crucial for the simple conversational format.
+        return "\n".join(formatted_history_parts) + "\nBot:"
 
     def clear_history(self):
         """

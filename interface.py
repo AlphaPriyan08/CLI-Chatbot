@@ -1,5 +1,3 @@
-# interface.py
-
 from model_loader import ModelLoader
 from chat_memory import ChatMemory
 import os
@@ -9,7 +7,7 @@ class ChatbotInterface:
     Manages the command-line interface for the chatbot, integrating
     the model loader and chat memory components.
     """
-    def __init__(self, model_name: str = "microsoft/phi-1_5", max_memory_turns: int = 5):
+    def __init__(self, model_name: str = "microsoft/phi-2", max_memory_turns: int = 5): # CHANGED MODEL HERE
         # Initialize the model loader responsible for fetching and preparing the LLM.
         self.model_loader = ModelLoader(model_name=model_name)
         # Initialize the chat memory to store and manage conversation history.
@@ -58,68 +56,67 @@ class ChatbotInterface:
                 self.chat_memory.add_message("User", user_input)
 
                 # Retrieve the formatted conversation history from memory.
-                # The `get_conversation_history` method now formats it as "Instruct: ...\nOutput:".
                 prompt = self.chat_memory.get_conversation_history()
-                # print(f"\n[DEBUG] Prompt fed to model:\n{prompt}\n") # Uncomment for debugging prompt
+                # print(f"\n[DEBUG] Prompt fed to model:\n---START PROMPT---\n{prompt}\n---END PROMPT---\n")
 
                 # Generate a response using the loaded Hugging Face model pipeline.
                 # Parameters control the length, creativity, and stopping conditions of the generation.
                 generation_output = self.generator(
                     prompt,
-                    max_new_tokens=200,  # Increased to allow for longer, more complete answers.
-                    num_return_sequences=1, # We only need one response from the model.
-                    do_sample=True,      # Enables sampling for more varied and human-like responses (vs. deterministic).
-                    temperature=0.7,     # Adjusted slightly higher for more natural variety, can tune as needed.
-                    top_k=50,            # Considers only the top K most probable next tokens.
-                    top_p=0.95,          # Nucleus sampling: considers tokens whose cumulative probability exceeds p.
-                    truncation=True,     # Ensures input prompt fits model's maximum context length by truncating older parts.
-                    pad_token_id=self.generator.tokenizer.eos_token_id, # Tells the model what token to use for padding.
-                    eos_token_id=self.generator.tokenizer.eos_token_id # Tells the model when to stop generating (end-of-sequence token).
+                    max_new_tokens=100,  # Reducing max tokens to encourage conciseness and prevent rambling.
+                                         # Can be adjusted if answers are consistently too short.
+                    num_return_sequences=1,
+                    do_sample=True,
+                    temperature=0.6,     # Slightly lower temperature for less randomness/more focused answers.
+                    top_k=50,
+                    top_p=0.9,           # Slightly lower top_p for more focused token selection.
+                    truncation=True,
+                    pad_token_id=self.generator.tokenizer.eos_token_id,
+                    eos_token_id=self.generator.tokenizer.eos_token_id
                 )
 
                 # Extract the generated text from the model's output.
                 full_generated_text = generation_output[0]['generated_text']
 
-                # --- REFINED POST-PROCESSING FOR PHI-1.5 ---
-                # Phi models often regenerate the "Instruct: ...\nOutput:" part or similar structures.
-                # We need to extract only the actual bot response after the *last* "Output:".
-                bot_response_raw = ""
-                last_output_idx = full_generated_text.rfind("Output:")
-                if last_output_idx != -1:
-                    # Extract everything after the last "Output:" occurrence.
-                    bot_response_raw = full_generated_text[last_output_idx + len("Output:"):].strip()
-                else:
-                    # Fallback: if "Output:" isn't found, assume model just started generating after the prompt.
-                    # This might happen if the prompt was short and not reproduced.
-                    bot_response_raw = full_generated_text.replace(prompt, "", 1).strip()
+                # The model generates the prompt + its response. We need to remove the original prompt
+                # to get only the bot's newly generated part.
+                bot_response_raw = full_generated_text.replace(prompt, "", 1).strip()
 
-                # Define explicit patterns that indicate the end of a desired response
-                # or a shift to an undesired format (like exercises or new speaker turns).
+                # --- REVISED POST-PROCESSING FOR PHI-2 VERBOSITY ---
+                # Define patterns that indicate the end of the desired response or a start of unwanted text.
+                # The order here is important: we want to cut at the *earliest* unwanted pattern.
                 stop_phrases = [
-                    "\nUser:",          # If the model hallucinates a new user turn
-                    "\nBot:",           # If the model hallucinates a new bot turn (old format)
-                    "\nInstruct:",      # If the model hallucinates a new instruction
-                    "\nQuestion:",      # Common start of a new question
-                    "\nAnswer:",        # Common start of an answer
-                    "\nExercise",       # Catches the "Exercise X:" pattern
-                    "\n1.", "\n2.", "\n-", # Catches numbered/bulleted lists starting new ideas
-                    "\n\n",             # Double newline often indicates end of thought.
+                    "\nUser:",          # Catches the start of a new user turn
+                    "\nBot:",           # Catches the start of a new bot turn (if model repeats itself)
+                    "\nAssistant:",     # Catches if the model shifts to an 'Assistant' persona
+                    "\n\n",             # Catches explicit blank lines often indicating end of a thought block
+                    "\nQuestion:",      # Catches patterns like "Question:..."
+                    "\nAnswer:",        # Catches patterns like "Answer:..."
+                    "\nImagine a universe", # Catches the specific rambling you observed
+                    "\nThank you for",  # Catches parts of the polite but irrelevant rambling
+                    "\nI need help with" # Catches parts of the technical issue scenario
                 ]
 
-                # Iterate through stop phrases and truncate the response if one is found.
                 bot_response = bot_response_raw
+                # Iterate through stop phrases and truncate the response if one is found.
+                # We stop at the *first* match to get the most concise desired response.
                 for phrase in stop_phrases:
                     if phrase in bot_response:
                         bot_response = bot_response.split(phrase)[0].strip()
-                        break # Stop at the first encountered stop phrase
+                        break # Found a cutoff point, so stop looking for others.
 
-                # Final cleanup: remove any leading/trailing whitespace that might remain.
+                # If the bot's response still starts with "Bot:" or "Assistant:" (e.g., if it didn't generate a newline),
+                # remove that prefix, as our display already adds "Bot:".
+                if bot_response.lower().startswith("bot:"):
+                    bot_response = bot_response[len("bot:"):].strip()
+
+                # Final strip to remove any lingering leading/trailing whitespace.
                 bot_response = bot_response.strip()
 
-                # Fallback if the response becomes empty after cleaning (e.g., model only generated a stop token).
+                # Fallback if the response becomes completely empty after cleaning.
                 if not bot_response:
-                    bot_response = "I'm sorry, I couldn't generate a clear response for that. Can you please rephrase?"
-                # --- END REFINED POST-PROCESSING ---
+                    bot_response = "I'm sorry, I couldn't provide a clear answer for that. Can you please rephrase?"
+                # --- END REVISED POST-PROCESSING ---
 
                 # Add the bot's (cleaned) response to the conversation history.
                 self.chat_memory.add_message("Bot", bot_response)
@@ -139,5 +136,5 @@ class ChatbotInterface:
 # Entry point for running the chatbot directly from the script.
 if __name__ == "__main__":
     # Initialize the chatbot interface with the desired model and memory size.
-    chatbot = ChatbotInterface(model_name="microsoft/phi-1_5", max_memory_turns=5)
+    chatbot = ChatbotInterface(model_name="microsoft/phi-2", max_memory_turns=5) # CHANGED MODEL HERE
     chatbot.start()
