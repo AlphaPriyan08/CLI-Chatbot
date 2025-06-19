@@ -7,6 +7,7 @@ class ModelLoader:
     text generation pipeline.
     """
     def __init__(self, model_name: str = "microsoft/phi-1_5"):
+        # smaller models like distilgpt2 or OPT-125m struggled with factual question answering and maintaining coherence 
         self.model_name = model_name
         self.pipeline = None
         # Determine the device to use (GPU if available, otherwise CPU)
