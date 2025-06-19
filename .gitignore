@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python/
+env/
+venv/
+.venv/  # Your virtual environment folder
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Hugging Face cache
+.cache/huggingface/
+huggingface_hub/
+
+# IDE-specific files (VS Code)
+.vscode/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Jupyter Notebook files (if you decide to use one later)
+.ipynb_checkpoints
