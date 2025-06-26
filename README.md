@@ -136,12 +136,3 @@ The project is organized into three main Python files, adhering to the modularit
 6.  **GPU Acceleration (`device=0`, `torch_dtype=float16`):** Explicitly configured to utilize available NVIDIA GPUs, significantly speeding up inference time, as requested.
 7.  **`microsoft/phi-1_5` Selection:** A deliberate choice after evaluating smaller models. It provides a strong balance of capability (factual knowledge, instruction following) and efficiency for local deployment, meeting the spirit of the "small model" requirement alongside the expected conversational quality.
 8.  **Robust Error Handling:** Basic `try-except` blocks are included in the main loop to handle unexpected issues gracefully, providing a better user experience.
-
-## Evaluation Criteria Addressed
-
-This project directly addresses the following evaluation criteria:
-
--   **Code correctness and modularity:** Achieved through logical separation into three Python modules and adherence to Python best practices.
--   **Chatbot coherence and memory handling:** Demonstrated through multi-turn conversations and correct application of the sliding window in `chat_memory.py`. The `phi-1_5` model ensures high coherence.
--   **Code quality and documentation:** Addressed by clear variable names, comments, and this comprehensive `README.md`.
--   **Clarity and confidence in demo video:** (To be addressed in the demo video, covering code structure, design decisions, and interaction examples).
